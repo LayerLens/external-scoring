@@ -3,6 +3,50 @@ METADATA = {
     "description": "Math expression equivalence testing"
 }
 
+def last_boxed_only_string(string):
+    """Extract the last \boxed{...} or \fbox{...} element from a string."""
+    idx = string.rfind("\\boxed")
+    if idx < 0:
+        idx = string.rfind("\\fbox")
+        if idx < 0:
+            return None
+            
+    i = idx
+    right_brace_idx = None
+    num_left_braces_open = 0
+    while i < len(string):
+        if string[i] == "{":
+            num_left_braces_open += 1
+        if string[i] == "}":
+            num_left_braces_open -= 1
+            if num_left_braces_open == 0:
+                right_brace_idx = i
+                break
+        i += 1
+    
+    if right_brace_idx == None:
+        return None
+        
+    return string[idx:right_brace_idx + 1]
+
+def clean_numbers(string):
+    """Clean numbers in the given string for consistent formatting."""
+    num_prev_digits = 0
+    new_string = ""
+    for i, c in enumerate(string):
+        if c in {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'}:
+            num_prev_digits += 1
+        else:
+            if num_prev_digits > 3:
+                string_number = new_string[-num_prev_digits:]
+                new_string = new_string[:-num_prev_digits] + "{0:,}".format(int(string_number))
+            num_prev_digits = 0
+        new_string += c
+    if num_prev_digits > 3:
+        string_number = new_string[-num_prev_digits:]
+        new_string = new_string[:-num_prev_digits] + "{0:,}".format(int(string_number))
+    return new_string
+
 def _fix_fracs(string):
     substrs = string.split("\\frac")
     new_str = substrs[0]
@@ -135,7 +179,30 @@ def _strip_string(string):
 
     return string
 
+def extract_and_normalize_answer(string):
+    """Extract boxed answer and normalize it."""
+    if string is None:
+        return None
+        
+    # Extract boxed content
+    boxed = last_boxed_only_string(string)
+    if boxed is None:
+        return string
+        
+    # Remove \boxed{} wrapper
+    if boxed.startswith("\\boxed{") and boxed.endswith("}"):
+        boxed = boxed[7:-1]  # Remove \boxed{ and }
+    elif boxed.startswith("\\fbox{") and boxed.endswith("}"):
+        boxed = boxed[6:-1]  # Remove \fbox{ and }
+    
+    # Clean and normalize
+    boxed = clean_numbers(boxed)
+    boxed = _strip_string(boxed)
+    
+    return boxed
+
 def is_equiv(str1, str2, verbose=False):
+    """Compare two mathematical expressions for equivalence."""
     if str1 is None and str2 is None:
         print("WARNING: Both None")
         return True
@@ -143,32 +210,33 @@ def is_equiv(str1, str2, verbose=False):
         return False
 
     try:
-        ss1 = _strip_string(str1)
-        ss2 = _strip_string(str2)
+        # Extract and normalize both answers
+        ss1 = extract_and_normalize_answer(str1)
+        ss2 = extract_and_normalize_answer(str2)
+        
         if verbose:
-            print(ss1, ss2)
+            print(f"Normalized str1: {ss1}")
+            print(f"Normalized str2: {ss2}")
+            
         return ss1 == ss2
-    except:
+    except Exception as e:
+        print(f"Equivalence check failed: {str(e)}")
         return str1 == str2
 
 def run_tests(response_data):
     """
     Main test function called by the test runner.
     Args:
-        response_data: Dict containing:
-            - result/parsed_result: The model's response
-            - prompt.truth: The ground truth answer
-            - prompt.id: The test ID
-            - prompt.subset: The problem subset (optional)
+        response_data: Dict containing response and truth
     Returns:
-        bool: True if the response is equivalent to the truth, False otherwise
+        bool: True if answers are equivalent
     """
     try:
-        # Get response and truth from the data
+        # Extract response and truth
         response = response_data.get('parsed_result', response_data.get('result', ''))
         truth = response_data['prompt'].get('parsed_truth', response_data['prompt'].get('truth', ''))
         
-        # Optional: Get subset for subset-specific handling
+        # Get subset for potential subset-specific handling
         subset = response_data['prompt'].get('subset', '')
         
         # Compare using our equivalence function
