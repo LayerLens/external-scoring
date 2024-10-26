@@ -1,23 +1,29 @@
-
-
-
-METADATA = {}
-
+METADATA = {
+    "entry_point": "decode_cyclic"
+}
 
 def check(candidate):
-    from random import randint, choice
-    import string
+    assert candidate(encoded_str) == str
 
-    letters = string.ascii_lowercase
-    for _ in range(100):
-        str = ''.join(choice(letters) for i in range(randint(10, 20)))
-        encoded_str = encode_cyclic(str)
-        assert candidate(encoded_str) == str
-
-
-
-def run_tests():
-    check(decode_cyclic)
-
-if __name__ == "__main__":
-    run_tests()
+def run_tests(response_data):
+    try:
+        # Create namespace and execute response code
+        namespace = {}
+        exec(response_data.get('parsed_result', response_data.get('result')), namespace)
+        
+        # Find the candidate function
+        candidate_name = None
+        for name, obj in namespace.items():
+            if callable(obj) and name not in ('__builtins__', 'check', 'run_tests'):
+                candidate_name = name
+                break
+                
+        if not candidate_name:
+            return False
+            
+        # Run the checks
+        check(namespace[candidate_name])
+        return True
+    except Exception as e:
+        print(f"Test failed: {str(e)}")
+        return False

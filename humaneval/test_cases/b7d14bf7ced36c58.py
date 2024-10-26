@@ -1,21 +1,31 @@
-
-
-
 METADATA = {
-    'author': 'jt',
-    'dataset': 'test'
+    "entry_point": "mean_absolute_deviation"
 }
-
 
 def check(candidate):
     assert abs(candidate([1.0, 2.0, 3.0]) - 2.0/3.0) < 1e-6
     assert abs(candidate([1.0, 2.0, 3.0, 4.0]) - 1.0) < 1e-6
     assert abs(candidate([1.0, 2.0, 3.0, 4.0, 5.0]) - 6.0/5.0) < 1e-6
 
-
-
-def run_tests():
-    check(mean_absolute_deviation)
-
-if __name__ == "__main__":
-    run_tests()
+def run_tests(response_data):
+    try:
+        # Create namespace and execute response code
+        namespace = {}
+        exec(response_data.get('parsed_result', response_data.get('result')), namespace)
+        
+        # Find the candidate function
+        candidate_name = None
+        for name, obj in namespace.items():
+            if callable(obj) and name not in ('__builtins__', 'check', 'run_tests'):
+                candidate_name = name
+                break
+                
+        if not candidate_name:
+            return False
+            
+        # Run the checks
+        check(namespace[candidate_name])
+        return True
+    except Exception as e:
+        print(f"Test failed: {str(e)}")
+        return False

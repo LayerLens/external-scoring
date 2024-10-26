@@ -1,7 +1,8 @@
+METADATA = {
+    "entry_point": "rounded_avg"
+}
 
 def check(candidate):
-
-    # Check some simple cases
     assert candidate(1, 5) == "0b11"
     assert candidate(7, 13) == "0b1010"
     assert candidate(964,977) == "0b1111001010"
@@ -11,17 +12,29 @@ def check(candidate):
     assert candidate(362,496) == "0b110101101"
     assert candidate(350,902) == "0b1001110010"
     assert candidate(197,233) == "0b11010111"
-
-
-    # Check some edge cases that are easy to work out by hand.
     assert candidate(7, 5) == -1
     assert candidate(5, 1) == -1
     assert candidate(5, 5) == "0b101"
 
-
-
-def run_tests():
-    check(rounded_avg)
-
-if __name__ == "__main__":
-    run_tests()
+def run_tests(response_data):
+    try:
+        # Create namespace and execute response code
+        namespace = {}
+        exec(response_data.get('parsed_result', response_data.get('result')), namespace)
+        
+        # Find the candidate function
+        candidate_name = None
+        for name, obj in namespace.items():
+            if callable(obj) and name not in ('__builtins__', 'check', 'run_tests'):
+                candidate_name = name
+                break
+                
+        if not candidate_name:
+            return False
+            
+        # Run the checks
+        check(namespace[candidate_name])
+        return True
+    except Exception as e:
+        print(f"Test failed: {str(e)}")
+        return False
