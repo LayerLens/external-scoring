@@ -162,17 +162,22 @@ def ll_run_tests(response_data):
     try:
         # Initialize test environment
         global correctness
+        correctness = []
+        
+        # Use module globals for execution namespace
+        namespace = globals()
+        namespace['correctness'] = correctness
         
         # Execute ground truth
-        correctness = []
-        namespace = {"correctness": correctness}
         ground_truth = response_data.get("truth", "")
         exec(ground_truth, namespace)
         ground_truth_calls = copy.deepcopy(correctness)
         
-        # Execute response
+        # Reset correctness for response execution
         correctness = []
-        namespace = {"correctness": correctness}
+        namespace['correctness'] = correctness
+        
+        # Execute response
         response_code = response_data.get("parsed_result", response_data.get("result", ""))
         exec(response_code, namespace)
         response_calls = copy.deepcopy(correctness)
@@ -181,12 +186,12 @@ def ll_run_tests(response_data):
         if len(response_calls) != len(ground_truth_calls):
             print(f"Expected {len(ground_truth_calls)} function calls, got {len(response_calls)}")
             return False
-        
+            
         for expected, actual in zip(ground_truth_calls, response_calls):
             if expected != actual:
                 print(f"Function call mismatch:\nExpected: {expected}\nGot: {actual}")
                 return False
-        
+                
         return True
         
     except Exception as e:
