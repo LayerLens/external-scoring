@@ -1,13 +1,17 @@
 METADATA = {
-    "entry_point": "search"
+    "entry_point": "search",
+    "description": "Test function solution for search"
 }
-
 def check(candidate):
+
+    # manually generated tests
     assert candidate([5, 5, 5, 5, 1]) == 1
     assert candidate([4, 1, 4, 1, 4, 4]) == 4
     assert candidate([3, 3]) == -1
     assert candidate([8, 8, 8, 8, 8, 8, 8, 8]) == 8
     assert candidate([2, 3, 3, 2, 2]) == 2
+
+    # automatically generated tests
     assert candidate([2, 7, 8, 8, 4, 8, 7, 3, 9, 6, 5, 10, 4, 3, 6, 7, 1, 7, 4, 10, 8, 1]) == 1
     assert candidate([3, 2, 8, 2]) == 2
     assert candidate([6, 7, 1, 8, 8, 10, 5, 8, 5, 3, 10]) == 1
@@ -29,25 +33,34 @@ def check(candidate):
     assert candidate([7, 9, 9, 9, 3, 4, 1, 5, 9, 1, 2, 1, 1, 10, 7, 5, 6, 7, 6, 7, 7, 6]) == 1
     assert candidate([3, 10, 10, 9, 2]) == -1
 
-def run_tests(response_data):
+
+def ll_run_tests(response_data):
+    """
+    Main test function for code evaluation.
+    Args:
+        response_data: Dict containing response code
+    Returns:
+        bool: True if all test cases pass
+    """
     try:
         # Create namespace and execute response code
         namespace = {}
-        exec(response_data.get('parsed_result', response_data.get('result')), namespace)
-        
-        # Find the candidate function
-        candidate_name = None
-        for name, obj in namespace.items():
-            if callable(obj) and name not in ('__builtins__', 'check', 'run_tests'):
-                candidate_name = name
-                break
-                
-        if not candidate_name:
+        response_code = response_data.get('parsed_result', response_data.get('result', ''))
+        exec(response_code, namespace)
+
+        # Get the candidate function name from metadata
+        candidate_name = METADATA["entry_point"]
+        if candidate_name not in namespace:
+            print(f"Function '{candidate_name}' not found in response")
             return False
-            
-        # Run the checks
+
+        # Run test cases
         check(namespace[candidate_name])
         return True
+
+    except AssertionError as e:
+        print(f"Test case failed")
+        return False
     except Exception as e:
-        print(f"Test failed: {str(e)}")
+        print(f"Execution failed: {str(e)}")
         return False

@@ -1,31 +1,40 @@
 METADATA = {
-    "entry_point": "triangle_area"
+    "entry_point": "triangle_area",
+    "description": "Test function solution for triangle_area"
 }
-
 def check(candidate):
     assert candidate(5, 3) == 7.5
     assert candidate(2, 2) == 2.0
     assert candidate(10, 8) == 40.0
 
-def run_tests(response_data):
+
+def ll_run_tests(response_data):
+    """
+    Main test function for code evaluation.
+    Args:
+        response_data: Dict containing response code
+    Returns:
+        bool: True if all test cases pass
+    """
     try:
         # Create namespace and execute response code
         namespace = {}
-        exec(response_data.get('parsed_result', response_data.get('result')), namespace)
-        
-        # Find the candidate function
-        candidate_name = None
-        for name, obj in namespace.items():
-            if callable(obj) and name not in ('__builtins__', 'check', 'run_tests'):
-                candidate_name = name
-                break
-                
-        if not candidate_name:
+        response_code = response_data.get('parsed_result', response_data.get('result', ''))
+        exec(response_code, namespace)
+
+        # Get the candidate function name from metadata
+        candidate_name = METADATA["entry_point"]
+        if candidate_name not in namespace:
+            print(f"Function '{candidate_name}' not found in response")
             return False
-            
-        # Run the checks
+
+        # Run test cases
         check(namespace[candidate_name])
         return True
+
+    except AssertionError as e:
+        print(f"Test case failed")
+        return False
     except Exception as e:
-        print(f"Test failed: {str(e)}")
+        print(f"Execution failed: {str(e)}")
         return False

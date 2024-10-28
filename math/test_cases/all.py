@@ -1,10 +1,10 @@
-METADATA = {
-    "subsets": ["algebra", "arithmetic", "geometry"],  # Add your actual subsets here
-    "description": "Math expression equivalence testing"
-}
+METADATA = {}
 
 def last_boxed_only_string(string):
     """Extract the last \boxed{...} or \fbox{...} element from a string."""
+    if string is None:
+        return None
+        
     idx = string.rfind("\\boxed")
     if idx < 0:
         idx = string.rfind("\\fbox")
@@ -48,6 +48,7 @@ def clean_numbers(string):
     return new_string
 
 def _fix_fracs(string):
+    """Standardize fraction notation."""
     substrs = string.split("\\frac")
     new_str = substrs[0]
     if len(substrs) > 1:
@@ -75,10 +76,10 @@ def _fix_fracs(string):
                         new_str += "{" + a + "}" + b + post_substr
                     else:
                         new_str += "{" + a + "}" + b
-    string = new_str
-    return string
+    return new_str
 
 def _fix_a_slash_b(string):
+    """Convert a/b notation to \frac{a}{b}."""
     if len(string.split("/")) != 2:
         return string
     a = string.split("/")[0]
@@ -93,15 +94,15 @@ def _fix_a_slash_b(string):
         return string
 
 def _remove_right_units(string):
-    # "\\text{ " only ever occurs (at least in the val set) when describing units
+    """Remove units from the right side of expression."""
     if "\\text{ " in string:
         splits = string.split("\\text{ ")
         assert len(splits) == 2
         return splits[0]
-    else:
-        return string
+    return string
 
 def _fix_sqrt(string):
+    """Standardize square root notation."""
     if "\\sqrt" not in string:
         return string
     splits = string.split("\\sqrt")
@@ -116,65 +117,39 @@ def _fix_sqrt(string):
     return new_string
 
 def _strip_string(string):
-    # linebreaks  
+    """Clean and standardize LaTeX string formatting."""
+    # Basic cleaning
     string = string.replace("\n", "")
-
-    # remove inverse spaces
     string = string.replace("\\!", "")
-
-    # replace \\ with \
     string = string.replace("\\\\", "\\")
-
-    # replace tfrac and dfrac with frac
     string = string.replace("tfrac", "frac")
     string = string.replace("dfrac", "frac")
-
-    # remove \left and \right
     string = string.replace("\\left", "")
     string = string.replace("\\right", "")
-    
-    # Remove circ (degrees)
     string = string.replace("^{\\circ}", "")
     string = string.replace("^\\circ", "")
-
-    # remove dollar signs
     string = string.replace("\\$", "")
-    
-    # remove units (on the right)
     string = _remove_right_units(string)
-
-    # remove percentage
     string = string.replace("\\%", "")
     string = string.replace("\%", "")
-
-    # " 0." equivalent to " ." and "{0." equivalent to "{." Alternatively, add "0" if "." is the start of the string
+    
+    # Fix decimal notation
     string = string.replace(" .", " 0.")
     string = string.replace("{.", "{0.")
-    # if empty, return empty string
-    if len(string) == 0:
-        return string
-    if string[0] == ".":
+    if len(string) > 0 and string[0] == ".":
         string = "0" + string
 
-    # to consider: get rid of e.g. "k = " or "q = " at beginning
+    # Clean up equations
     if len(string.split("=")) == 2:
         if len(string.split("=")[0]) <= 2:
             string = string.split("=")[1]
 
-    # fix sqrt3 --> sqrt{3}
+    # Standardize notation
     string = _fix_sqrt(string)
-
-    # remove spaces
     string = string.replace(" ", "")
-
-    # \frac1b or \frac12 --> \frac{1}{b} and \frac{1}{2}, etc. Even works with \frac1{72} (but not \frac{72}1). Also does a/b --> \\frac{a}{b}
     string = _fix_fracs(string)
-
-    # manually change 0.5 --> \frac{1}{2}
     if string == "0.5":
         string = "\\frac{1}{2}"
-
-    # NOTE: X/Y changed to \frac{X}{Y} in dataset, but in simple cases fix in case the model output is X/Y
     string = _fix_a_slash_b(string)
 
     return string
@@ -191,9 +166,9 @@ def extract_and_normalize_answer(string):
         
     # Remove \boxed{} wrapper
     if boxed.startswith("\\boxed{") and boxed.endswith("}"):
-        boxed = boxed[7:-1]  # Remove \boxed{ and }
+        boxed = boxed[7:-1]
     elif boxed.startswith("\\fbox{") and boxed.endswith("}"):
-        boxed = boxed[6:-1]  # Remove \fbox{ and }
+        boxed = boxed[6:-1]
     
     # Clean and normalize
     boxed = clean_numbers(boxed)
@@ -223,9 +198,9 @@ def is_equiv(str1, str2, verbose=False):
         print(f"Equivalence check failed: {str(e)}")
         return str1 == str2
 
-def run_tests(response_data):
+def ll_run_tests(response_data):
     """
-    Main test function called by the test runner.
+    Main test function for math evaluation.
     Args:
         response_data: Dict containing response and truth
     Returns:
@@ -235,9 +210,6 @@ def run_tests(response_data):
         # Extract response and truth
         response = response_data.get('parsed_result', response_data.get('result', ''))
         truth = response_data['prompt'].get('parsed_truth', response_data['prompt'].get('truth', ''))
-        
-        # Get subset for potential subset-specific handling
-        subset = response_data['prompt'].get('subset', '')
         
         # Compare using our equivalence function
         return is_equiv(response, truth, verbose=METADATA.get('verbose', False))
