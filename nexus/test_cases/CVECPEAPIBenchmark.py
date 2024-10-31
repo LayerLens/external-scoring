@@ -441,6 +441,13 @@ def searchCPE(
     - delay: Can only be used if an API key is provided. The amount of time to sleep in between requests. Must be a value above 0.6 seconds if an API key is present. delay is set to 6 seconds if no API key is passed.
     - verbose: Prints the URL request for debugging purposes.
     """
+    args_dict = locals()
+    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
+    return_dict = {}
+    for key, value in args_dict.items():
+        if value:
+          return_dict[key] = value
+    correctness.append({"searchCPE": locals()})
 
 
 def ll_run_tests(response_data):
