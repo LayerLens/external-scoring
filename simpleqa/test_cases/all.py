@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from typing import Dict, Any, Optional
+import time
 
 METADATA = {}
 
@@ -63,7 +64,7 @@ Just return A, B, or C with no additional text.
 """
 
 def call_grader_model(prompt: str) -> str:
-    """Call grader model via OpenRouter."""
+    """Call grader model via OpenRouter with retry mechanism."""
     api_key = os.getenv('OpenRouterApiKey')
     if not api_key:
         print("ERROR: OpenRouterApiKey not found in environment")
@@ -81,24 +82,35 @@ def call_grader_model(prompt: str) -> str:
         ]
     }
     
-    try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=30
-        )
+    max_retries = 3  # Maximum number of retries
+    delay_seconds = 5  # Delay between retries in seconds
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=300
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result['choices'][0]['message']['content'].strip()
+                if content in ['A', 'B', 'C']:
+                    print(f"Grading Result: {content}")  # This will go to stdout via capture
+                    return content
+                print(f"Invalid grade received: {content}")
+            else:
+                print(f"Response status code: {response.status_code}, response text: {response.text}")
+        except Exception as e:
+            print(f"Error calling grader (attempt {attempt}): {str(e)}")
         
-        if response.status_code == 200:
-            result = response.json()
-            content = result['choices'][0]['message']['content'].strip()
-            if content in ['A', 'B', 'C']:
-                print(f"Grading Result: {content}")  # This will go to stdout via capture
-                return content
-            print(f"Invalid grade received: {content}")
-    except Exception as e:
-        print(f"Error calling grader: {str(e)}")
-        
+        if attempt < max_retries:
+            print(f"Retrying in {delay_seconds} seconds...")
+            time.sleep(delay_seconds)
+    # After retries exhausted
+    print("Max retries reached. Returning 'C' as default.")
     return 'C'  # Default to NOT_ATTEMPTED on any issues
 
 def ll_run_tests(response_data: Dict[str, Any]) -> bool:
