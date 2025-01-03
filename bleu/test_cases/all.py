@@ -39,20 +39,29 @@ def ll_run_tests(response_data: Dict[str, Any]) -> bool:
         threshold = 0.5
         success = bleu_score >= threshold
         
-        # Include the actual BLEU score in the details
-        details = {
-            "bleu_score": bleu_score,
-            "threshold": threshold,
-            "reference_tokens": len(reference[0]),
-            "candidate_tokens": len(candidate)
+        # Create result object matching ExecutionResult structure
+        result = {
+            "success": success,
+            "details": {
+                "bleu_score": bleu_score,
+                "threshold": threshold,
+                "reference_tokens": len(reference[0]),
+                "candidate_tokens": len(candidate)
+            }
         }
         
         print(f"Success: {success} (threshold: {threshold})")
-        return success, details
+        print(json.dumps(result))  # Print as JSON for scoring_runner.py to parse
+        return result["success"]  # Return just the boolean for backward compatibility
         
     except Exception as e:
-        print(f"Test failed: {str(e)}")
-        return False, {"error": str(e)}
+        error_result = {
+            "success": False,
+            "details": {},
+            "error": str(e)
+        }
+        print(json.dumps(error_result))
+        return False
 
 if __name__ == "__main__":
     # Example usage
@@ -62,6 +71,5 @@ if __name__ == "__main__":
             "truth": "This is the reference translation."
         }
     }
-    success, details = ll_run_tests(test_data)
+    success = ll_run_tests(test_data)
     print(f"Test {'passed' if success else 'failed'}")
-    print(f"Details: {details}")
