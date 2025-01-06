@@ -12,11 +12,10 @@ METADATA = {}
 
 # add rouge 1,2,L
 
-def ll_run_tests(response_data: Dict[str, Any]) -> bool:
+def ll_run_tests(response_data: Dict[str, Any]) -> float:
     """
     Main test function for BLEU score evaluation.
-    Returns True since execution completed successfully.
-    The actual score is passed via the score field.
+    Returns the BLEU score as a float between 0 and 1.
     """
     try:
         # Extract data
@@ -30,14 +29,9 @@ def ll_run_tests(response_data: Dict[str, Any]) -> bool:
         # Calculate BLEU score
         bleu_score = sentence_bleu(reference, candidate)
         
-        # Print details for debugging
-        # print(f"\nReference: {truth}")
-        # print(f"Candidate: {response}")
-        # print(f"BLEU Score: {bleu_score:.4f}")
-        
         # Create result object matching ExecutionResult structure
         result = {
-            "score": bleu_score,  # Score is directly in score field
+            "score": float(bleu_score),  # Ensure score is float
             "details": {
                 "reference_tokens": len(reference[0]),
                 "candidate_tokens": len(candidate)
@@ -45,14 +39,14 @@ def ll_run_tests(response_data: Dict[str, Any]) -> bool:
         }
         
         print(json.dumps(result))
-        return True
+        return float(bleu_score)  # Return float score
         
     except Exception as e:
         result = {
-            "score": 0.0,
+            "score": 0.0,  # Return 0.0 as float on error
             "details": {
                 "error": str(e)
             }
         }
         print(json.dumps(result))
-        return True
+        return 0.0  # Return float
