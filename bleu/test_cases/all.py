@@ -6,17 +6,17 @@ from nltk.tokenize import word_tokenize
 import nltk
 
 # Download required NLTK data
-try:
-    nltk.download('punkt', quiet=True)
-except:
-    pass
+nltk.download('punkt', quiet=True)
 
 METADATA = {}
+
+# add rouge 1,2,L
 
 def ll_run_tests(response_data: Dict[str, Any]) -> bool:
     """
     Main test function for BLEU score evaluation.
-    Returns a boolean indicating if the translation meets quality threshold.
+    Returns True since execution completed successfully.
+    The actual score is passed via the score field.
     """
     try:
         # Extract data
@@ -31,45 +31,28 @@ def ll_run_tests(response_data: Dict[str, Any]) -> bool:
         bleu_score = sentence_bleu(reference, candidate)
         
         # Print details for debugging
-        print(f"\nReference: {truth}")
-        print(f"Candidate: {response}")
-        print(f"BLEU Score: {bleu_score:.4f}")
-        
-        # Consider translation successful if BLEU score is above threshold
-        threshold = 0.5
-        success = bleu_score >= threshold
+        # print(f"\nReference: {truth}")
+        # print(f"Candidate: {response}")
+        # print(f"BLEU Score: {bleu_score:.4f}")
         
         # Create result object matching ExecutionResult structure
         result = {
-            "success": success,
+            "score": bleu_score,  # Score is directly in score field
             "details": {
-                "bleu_score": bleu_score,
-                "threshold": threshold,
                 "reference_tokens": len(reference[0]),
                 "candidate_tokens": len(candidate)
             }
         }
         
-        print(f"Success: {success} (threshold: {threshold})")
-        print(json.dumps(result))  # Print as JSON for scoring_runner.py to parse
-        return result["success"]  # Return just the boolean for backward compatibility
+        print(json.dumps(result))
+        return True
         
     except Exception as e:
-        error_result = {
-            "success": False,
-            "details": {},
-            "error": str(e)
+        result = {
+            "score": 0.0,
+            "details": {
+                "error": str(e)
+            }
         }
-        print(json.dumps(error_result))
-        return False
-
-if __name__ == "__main__":
-    # Example usage
-    test_data = {
-        "result": "This is a test translation.",
-        "prompt": {
-            "truth": "This is the reference translation."
-        }
-    }
-    success = ll_run_tests(test_data)
-    print(f"Test {'passed' if success else 'failed'}")
+        print(json.dumps(result))
+        return True
