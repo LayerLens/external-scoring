@@ -14,7 +14,7 @@ METADATA = {}
 def ll_run_tests(response_data: Dict[str, Any]) -> float:
     """
     Main test function for BLEU and ROUGE score evaluation.
-    Returns the combined score as a float between 0 and 1.
+    Returns the BLEU score as a float between 0 and 1, and provides ROUGE scores in the details.
     """
     try:
         # Extract data
@@ -30,20 +30,10 @@ def ll_run_tests(response_data: Dict[str, Any]) -> float:
         scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
         rouge_scores = scorer.score(truth, response)
         
-        # Calculate final combined score (average of all metrics)
-        combined_scores = [
-            bleu_score,
-            rouge_scores['rouge1'].fmeasure,
-            rouge_scores['rouge2'].fmeasure,
-            rouge_scores['rougeL'].fmeasure
-        ]
-        final_score = sum(combined_scores) / len(combined_scores)
-        
         # Create result object
         result = {
-            "score": float(final_score),
+            "score": float(bleu_score),
             "details": {
-                "bleu_score": float(bleu_score),
                 "rouge1_f": float(rouge_scores['rouge1'].fmeasure),
                 "rouge2_f": float(rouge_scores['rouge2'].fmeasure),
                 "rougeL_f": float(rouge_scores['rougeL'].fmeasure),
@@ -53,7 +43,7 @@ def ll_run_tests(response_data: Dict[str, Any]) -> float:
         }
         
         print(json.dumps(result))
-        return float(final_score)
+        return float(bleu_score)
         
     except Exception as e:
         result = {
