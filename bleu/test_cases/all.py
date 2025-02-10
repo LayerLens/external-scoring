@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import json
 from typing import Dict, Any
-from nltk.translate.bleu_score import sentence_bleu
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from nltk.tokenize import word_tokenize
 import nltk
 from rouge_score import rouge_scorer
@@ -24,7 +24,10 @@ def ll_run_tests(response_data: Dict[str, Any]) -> float:
         # Calculate BLEU score
         reference = [word_tokenize(truth.lower())]
         candidate = word_tokenize(response.lower())
-        bleu_score = sentence_bleu(reference, candidate)
+        smoothing = SmoothingFunction().method3
+        bleu_score = sentence_bleu(reference, candidate, 
+                                 weights=(0.25, 0.25, 0.25, 0.25),
+                                 smoothing_function=smoothing)
         
         # Calculate ROUGE scores
         scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
