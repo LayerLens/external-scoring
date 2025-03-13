@@ -442,6 +442,55 @@ def grade_answer(given_answer: str, ground_truth: str) -> bool:
 
     return is_correct
 
+
+def last_boxed_only_string(string):
+    """Extract the last \boxed{...} or \fbox{...} element from a string."""
+    if string is None:
+        return None
+        
+    idx = string.rfind("\\boxed")
+    if idx < 0:
+        idx = string.rfind("\\fbox")
+        if idx < 0:
+            return None
+            
+    i = idx
+    right_brace_idx = None
+    num_left_braces_open = 0
+    while i < len(string):
+        if string[i] == "{":
+            num_left_braces_open += 1
+        if string[i] == "}":
+            num_left_braces_open -= 1
+            if num_left_braces_open == 0:
+                right_brace_idx = i
+                break
+        i += 1
+    
+    if right_brace_idx == None:
+        return None
+        
+    return string[idx:right_brace_idx + 1]
+
+
+def extract_boxed_content(string):
+    """Extract content from boxed element if it exists."""
+    if string is None:
+        return string
+        
+    boxed = last_boxed_only_string(string)
+    if boxed is None:
+        return string
+        
+    # Remove \boxed{} wrapper
+    if boxed.startswith("\\boxed{") and boxed.endswith("}"):
+        return boxed[7:-1]
+    elif boxed.startswith("\\fbox{") and boxed.endswith("}"):
+        return boxed[6:-1]
+    
+    return string
+
+
 METADATA = {}
 
 def ll_run_tests(response_data):
@@ -456,6 +505,9 @@ def ll_run_tests(response_data):
         # Extract response and truth
         response = response_data.get('parsed_result', response_data.get('result', ''))
         truth = response_data['prompt'].get('parsed_truth', response_data['prompt'].get('truth', ''))
+        
+        # Extract boxed content if available
+        response = extract_boxed_content(response)
         
         # Use the existing grade_answer function to compare them
         return grade_answer(response, truth)
