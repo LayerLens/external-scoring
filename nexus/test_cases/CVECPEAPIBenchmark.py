@@ -371,8 +371,8 @@ def searchCPE(
 
 def ll_run_tests(response_data):
     """
-    Test function that simply executes the provided code.
-    This version focuses on execution rather than comparison.
+    Test function that executes both response and ground truth code,
+    comparing the functions called to determine if they match.
     """
     try:
         # Initialize test environment
@@ -381,8 +381,9 @@ def ll_run_tests(response_data):
         
         # Extract code from response
         response_code = response_data.get("result", "") or ""
+        ground_truth = response_data.get("ground_truth", "") or ""
         
-        # First try with standard pattern
+        # First try with standard pattern for response
         response_match = re.search(r"```python\n(.*?)\n```", response_code, re.DOTALL)
         if response_match:
             response_exec_code = response_match.group(1).strip()
@@ -401,7 +402,29 @@ def ll_run_tests(response_data):
             
         print("\nExtracted response code:", response_exec_code)
         
-        # Skip execution if code is empty
+        # Extract ground truth code if it exists
+        if ground_truth:
+            truth_match = re.search(r"```python\n(.*?)\n```", ground_truth, re.DOTALL)
+            if truth_match:
+                truth_exec_code = truth_match.group(1).strip()
+            else:
+                # Try with indented code pattern
+                truth_match = re.search(r"```python\n\s+(.*?)\n```", ground_truth, re.DOTALL)
+                if truth_match:
+                    truth_exec_code = truth_match.group(1).strip()
+                else:
+                    # Try without the newlines requirement
+                    truth_match = re.search(r"```python(.*?)```", ground_truth, re.DOTALL)
+                    if truth_match:
+                        truth_exec_code = truth_match.group(1).strip()
+                    else:
+                        truth_exec_code = ground_truth.strip()
+                
+            print("Extracted ground truth code:", truth_exec_code)
+        else:
+            truth_exec_code = None
+        
+        # Skip execution if response code is empty
         if not response_exec_code:
             print("Response code is empty, skipping execution")
             return False
@@ -424,8 +447,30 @@ def ll_run_tests(response_data):
             response_calls = copy.deepcopy(correctness)
             print(f"Response execution successful, made {len(response_calls)} function calls")
             
-            # Always return True if execution was successful
-            return True
+            # If no ground truth provided, return True if execution was successful
+            if not truth_exec_code:
+                return True
+                
+            # Reset correctness list for ground truth execution
+            correctness = []
+            
+            # Execute ground truth code and track function calls
+            print("\nExecuting ground truth code...")
+            try:
+                exec(truth_exec_code, exec_namespace)
+                truth_calls = copy.deepcopy(correctness)
+                print(f"Ground truth execution successful, made {len(truth_calls)} function calls")
+                
+                # Compare the function calls
+                calls_match = response_calls == truth_calls
+                print(f"Function calls match: {calls_match}")
+                
+                return calls_match
+                
+            except Exception as e:
+                print(f"Ground truth execution failed: {str(e)}")
+                # If ground truth fails to execute, return False
+                return False
             
         except Exception as e:
             print(f"Response execution failed: {str(e)}")
