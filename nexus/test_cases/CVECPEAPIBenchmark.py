@@ -11,6 +11,11 @@ METADATA = {
 # Initialize correctness tracking
 correctness = []
 
+def pre_initialization():
+    """Reset the correctness list before each test run"""
+    global correctness
+    correctness = []
+
 # API Function Definitions
 def count_cvecpe_items(
     cvecpeList: List[Dict]
@@ -21,13 +26,8 @@ def count_cvecpe_items(
     Args:
     - cvecpeList: This arg takes in a list of CVE or CPE items.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"count_cvecpe_items": locals()})
+    return len(cvecpeList) if cvecpeList else 0
 
 def summarize_cvecpes(
     cvecpeList: List[Dict]
@@ -38,13 +38,8 @@ def summarize_cvecpes(
     Args:
     - cvecpeList: This arg takes in a list of CVE or CPE items.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"summarize_cvecpes": locals()})
+    return {"total": len(cvecpeList), "types": ["CVE", "CPE"]} if cvecpeList else {}
 
 def verify_and_process_data_range_start(
     startdate: str,
@@ -57,13 +52,8 @@ def verify_and_process_data_range_start(
     - startdate: The start date of the searched time span.
     - enddate: The end date of the searched time span.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"verify_and_process_data_range_start": locals()})
+    return startdate  # Mock implementation returns the original startdate
 
 def verify_and_process_data_range_end(
     startdate: str,
@@ -76,13 +66,8 @@ def verify_and_process_data_range_end(
     - startdate: The start date of the searched time span.
     - enddate: The end date of the searched time span.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"verify_and_process_data_range_end": locals()})
+    return enddate  # Mock implementation returns the original enddate
 
 def compare_cvecpes(
     cvecpeList1: List[Dict],
@@ -95,13 +80,8 @@ def compare_cvecpes(
     - cvecpeList1: This arg takes in a list of CVE or CPE items to compare with another list.
     - cvecpeList2: This arg takes in a list of CVE or CPE items to compare with another list.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"compare_cvecpes": locals()})
+    return {"common": 1, "differences": 2}  # Mock result
 
 def search_backup_keywords(
     cvecpeList: List[Dict],
@@ -114,13 +94,12 @@ def search_backup_keywords(
     - cvecpeList: This arg takes in a list of CVE or CPE items.
     - backup_keyword: The backup keyword to search if the original keyword doesn't lead to corresponding results.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"search_backup_keywords": locals()})
+    if cvecpeList:
+        return cvecpeList
+    else:
+        # Mock implementation, return sample data
+        return [{"id": "CVE-2023-1234", "keyword": backup_keyword}]
 
 def getCPEName(
     cpeObject: Dict
@@ -131,31 +110,20 @@ def getCPEName(
     Args:
     - cpeObject: A CPE object from which the CPE name is to be extracted. The object should have a 'cpeName' field.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"getCPEName": locals()})
+    return cpeObject.get('cpeName', 'cpe:/a:example:product:1.0')
 
 def get_first_object_from_list(
     list_of_objects: List[Any]
 ) -> Any:
-
     """
     Retrieves the first object from a given list. If the list is empty, it return `None`.
 
     Args:
     - list_of_objects: List containing objects.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"get_first_object_from_list": locals()})
+    return list_of_objects[0] if list_of_objects else None
 
 def countCVEsBySeverity(
     cve_list: List[Dict]
@@ -166,13 +134,8 @@ def countCVEsBySeverity(
     Args:
     - cve_list: A list of dictionary objects each representing a CVE. Each dictionary should include a 'cvssV3Severity' key.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"countCVEsBySeverity": locals()})
+    return {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
 
 def sortCVEsByCVSSv3Score(
     cve_list: List[Dict],
@@ -185,13 +148,8 @@ def sortCVEsByCVSSv3Score(
     - cve_list: List of CVE objects, where each object contains details such as CVE identifier, CVSS v2 and v3 scores, etc.
     - descending: If set to True, the list will be sorted in descending order (highest CVSSv3Score first).
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"sortCVEsByCVSSv3Score": locals()})
+    return cve_list  # Mock implementation returns the original list
 
 def sortCVEsByCVSSv2Score(
     cve_list: List[Dict],
@@ -204,13 +162,8 @@ def sortCVEsByCVSSv2Score(
     - cve_list: List of CVE objects, where each object contains details such as CVE identifier, CVSS v2 and v3 scores, etc.
     - descending: If set to True, the list will be sorted in descending order (highest CVSSv2Score first). Defaults to True.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"sortCVEsByCVSSv2Score": locals()})
+    return cve_list  # Mock implementation returns the original list
 
 def sortCVEsByModDate(
     cve_list: List[Dict],
@@ -223,13 +176,8 @@ def sortCVEsByModDate(
     - cve_list: A list of CVE objects. Each object should at least have a property for last modification date.
     - descending: If set to True, the list will be sorted in descending order (most recently modified first).
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"sortCVEsByModDate": locals()})
+    return cve_list  # Mock implementation returns the original list
 
 def filterCVEByLanguage(
     cve_list: List[Dict],
@@ -242,13 +190,8 @@ def filterCVEByLanguage(
     - cve_list: A list of CVE objects. Each object should contain information about a particular CVE, including its description available in various languages.
     - language: Language code for which the function will check in the description field of the CVE objects. This must follow the ISO 639-1 language codes, such as 'en' for English, 'es' for Spanish, and 'de' for German, etc.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"filterCVEByLanguage": locals()})
+    return [cve for cve in cve_list if cve.get('language') == language] if cve_list else []
 
 def filterCVEsBySeverity(
     cveList: List[Dict],
@@ -261,13 +204,13 @@ def filterCVEsBySeverity(
     - cveList: List of objects containing a collection of CVEs. Each CVE object is expected to have 'cvssV2Severity' and/or 'cvssV3Severity' properties reflecting the severity level of the vulnerability.
     - severityLevel: The severity level with which to filter the CVEs. Accepts 'LOW', 'MEDIUM', 'HIGH' for both 'cvssV2Severity' and 'cvssV3Severity', and 'CRITICAL' for 'cvssV3Severity' only.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"filterCVEsBySeverity": locals()})
+    filtered_list = []
+    if cveList and severityLevel:
+        for cve in cveList:
+            if cve.get('cvssV3Severity') == severityLevel or cve.get('cvssV2Severity') == severityLevel:
+                filtered_list.append(cve)
+    return filtered_list
 
 def filterDeprecatedCPEs(
     cpeList: List[Dict]
@@ -278,13 +221,8 @@ def filterDeprecatedCPEs(
     Args:
     - cpeList: A list of CPE objects. Each CPE object in the list has a 'deprecated' key. If the value of this key is False, it means the CPE object is not deprecated.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"filterDeprecatedCPEs": locals()})
+    return [cpe for cpe in cpeList if not cpe.get('deprecated', False)] if cpeList else []
 
 def sortCPEsByLastMod(
     cpeList: List[Dict],
@@ -297,13 +235,8 @@ def sortCPEsByLastMod(
     - cpeList: The list of object collections of CPEs that need to be sorted. Each object collection has a lastModified field.
     - descending: Determines the order of sort. If True, CPEs will be sorted in descending order of 'last modification time'. If False, the sorting will be in descending order.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"sortCPEsByLastMod": locals()})
+    return cpeList  # Mock implementation returns the original list
 
 def mergeCVEs(
     list1: List[Dict],
@@ -316,13 +249,8 @@ def mergeCVEs(
     - list1: First list of objects each holding details of a CVE. Defined by NVD format.
     - list2: Second list of objects each holding details of a CVE. Defined by NVD format.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"mergeCVEs": locals()})
+    return (list1 or []) + (list2 or [])
 
 def mergeCPEs(
     list1: List[Dict],
@@ -335,13 +263,8 @@ def mergeCPEs(
     - list1: List of CPEs. Each object in the list should contain a collection of CPEs.
     - list2: Another list of CPEs. Each object in this list should also contain a collection of CPEs.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"mergeCPEs": locals()})
+    return (list1 or []) + (list2 or [])
 
 def searchCVE(
     cpeName: str = None,
@@ -406,13 +329,11 @@ def searchCVE(
     - key: NVD API Key. Allows for the user to define a delay. NVD recommends scripts sleep 6 seconds in between requests. If no valid API key is provided, requests are sent with a 6 second delay.
     - verbose: Prints the full NVD API URL for each request.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"searchCVE": locals()})
+    # Mock implementation
+    return [
+        {"id": "CVE-2023-1234", "description": "Sample CVE for testing", "cvssV3Severity": "HIGH"}
+    ]
 
 def searchCPE(
     cpeNameId: str = None,
@@ -442,90 +363,114 @@ def searchCPE(
     - delay: Can only be used if an API key is provided. The amount of time to sleep in between requests. Must be a value above 0.6 seconds if an API key is present. delay is set to 6 seconds if no API key is passed.
     - verbose: Prints the URL request for debugging purposes.
     """
-    args_dict = locals()
-    args_dict.pop("kwargs", None)  # Remove kwargs if it exists
-    return_dict = {}
-    for key, value in args_dict.items():
-        if value:
-          return_dict[key] = value
     correctness.append({"searchCPE": locals()})
-
+    # Mock implementation
+    return [
+        {"cpeName": "cpe:/a:example:product:1.0", "title": "Example Product", "deprecated": False}
+    ]
 
 def ll_run_tests(response_data):
     """
-    Improved test function for API call validation.
-    Key changes:
-    1. Extract code properly from code blocks
-    2. Only execute the response, not the ground truth
-    3. Compare normalized text instead of function calls
+    Test function for API call validation following the Nexus benchmark approach.
+    Key points:
+    1. Compare actual function calls made rather than code text
+    2. Execute both response and ground truth code separately
+    3. Track and compare function calls through the global correctness list
+    4. Robust error handling and code extraction
     """
     try:
         # Initialize test environment
         global correctness
         correctness = []
         
-        # Extract code from ground truth without executing
-        ground_truth = response_data.get("truth", "")
-        ground_truth_match = re.search(r"(?s)```python\n(.*?)```", ground_truth)
+        # Extract code from ground truth - handle empty or null cases
+        ground_truth = response_data.get("truth", "") or ""
+        ground_truth_match = re.search(r"```python\n(.*?)\n```", ground_truth, re.DOTALL)
         if ground_truth_match:
-            # Just store the extracted code, don't execute it
             ground_truth_code = ground_truth_match.group(1).strip()
         else:
-            ground_truth_code = ground_truth.strip()
+            # Try without the newlines requirement
+            ground_truth_match = re.search(r"```python(.*?)```", ground_truth, re.DOTALL)
+            if ground_truth_match:
+                ground_truth_code = ground_truth_match.group(1).strip()
+            else:
+                ground_truth_code = ground_truth.strip()
             
         print("\nExtracted ground truth code:", ground_truth_code)
         
-        # Extract code from response
-        response_code = response_data.get("result", "")
-        response_match = re.search(r"(?s)```python\n(.*?)```", response_code)
+        # Extract code from response - handle empty or null cases
+        response_code = response_data.get("result", "") or ""
+        response_match = re.search(r"```python\n(.*?)\n```", response_code, re.DOTALL)
         if response_match:
             response_exec_code = response_match.group(1).strip()
         else:
-            response_exec_code = response_code.strip()
+            # Try without the newlines requirement
+            response_match = re.search(r"```python(.*?)```", response_code, re.DOTALL)
+            if response_match:
+                response_exec_code = response_match.group(1).strip()
+            else:
+                response_exec_code = response_code.strip()
             
         print("\nExtracted response code:", response_exec_code)
         
-        # Use module globals for execution namespace
-        namespace = globals()
-        namespace['correctness'] = correctness
+        # Skip execution if code is empty
+        if not response_exec_code:
+            print("Response code is empty, skipping execution")
+            return False
+            
+        # Check if response code matches a function call pattern
+        if not bool(re.match(r'\w+\(.*\)', response_exec_code.strip())):
+            print("Response does not contain a valid function call")
+            return False
         
-        # Execute only the response
+        # Prepare execution namespace with all mock functions
+        exec_namespace = globals().copy()
+        
+        # Reset correctness list for response execution
+        correctness = []
+        
+        # Execute response code and track function calls
         print("\nExecuting response code...")
         try:
-            exec(response_exec_code, namespace)
+            exec(response_exec_code, exec_namespace)
             response_calls = copy.deepcopy(correctness)
             print(f"Response execution successful, made {len(response_calls)} function calls")
         except Exception as e:
             print(f"Response execution failed: {str(e)}")
             return False
         
-        # Now compare the *text* of the extracted code, not the function calls
-        # This allows for different formatting but same semantic meaning
-        response_normalized = response_exec_code.replace("'", "\"").replace(" ", "")
-        ground_truth_normalized = ground_truth_code.replace("'", "\"").replace(" ", "")
+        # Skip comparison if ground truth is empty or no function calls were made
+        if not ground_truth_code:
+            print("Ground truth code is empty, skipping comparison")
+            return False
+            
+        if not response_calls:
+            print("No function calls were made by the response code")
+            return False
         
-        print("\nNormalized response:", response_normalized)
-        print("Normalized ground truth:", ground_truth_normalized)
+        # Reset correctness list and execute ground truth
+        correctness = []
+        try:
+            exec(ground_truth_code, exec_namespace)
+            ground_truth_calls = copy.deepcopy(correctness)
+            print(f"Ground truth execution successful, made {len(ground_truth_calls)} function calls")
+        except Exception as e:
+            print(f"Ground truth execution failed: {str(e)}")
+            return False
         
-        # Semantic comparison (this could be expanded with more sophisticated methods)
-        if response_normalized == ground_truth_normalized:
-            print("✅ Exact match after normalization!")
+        # Reset correctness list for future use
+        correctness = []
+        
+        # Compare function calls (this is the key approach - comparing actual calls not code text)
+        if response_calls == ground_truth_calls:
+            print("✅ Function calls match exactly!")
             return True
-            
-        # Check for function name match but different parameters (acceptable in some cases)
-        resp_func_match = re.search(r"^(\w+)\(", response_exec_code)
-        truth_func_match = re.search(r"^(\w+)\(", ground_truth_code)
-        
-        if resp_func_match and truth_func_match:
-            resp_func = resp_func_match.group(1)
-            truth_func = truth_func_match.group(1)
-            
-            if resp_func == truth_func:
-                print(f"✅ Same function called ({resp_func}) with different parameters")
-                return True
-                
-        print("❌ Code mismatch between response and ground truth")
-        return False
+        else:
+            # Print detailed comparison for debugging
+            print("❌ Function calls mismatch")
+            print(f"Response calls: {response_calls}")
+            print(f"Ground truth calls: {ground_truth_calls}")
+            return False
         
     except Exception as e:
         print(f"Test execution failed: {str(e)}")
