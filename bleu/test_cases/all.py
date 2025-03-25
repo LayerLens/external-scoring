@@ -1,53 +1,51 @@
 #!/usr/bin/env python3
 import json
 from typing import Dict, Any
-from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
-from nltk.tokenize import word_tokenize
-import nltk
-from rouge_score import rouge_scorer
-
-# Download required NLTK data
-nltk.download('punkt', quiet=True)
+import sacrebleu
+from sacrebleu.metrics import BLEU
 
 METADATA = {}
 
 def ll_run_tests(response_data: Dict[str, Any]) -> float:
     """
-    Main test function for BLEU and ROUGE score evaluation.
-    Returns the BLEU score as a float between 0 and 1, and provides ROUGE scores in the details.
+    Main test function for BLEU score evaluation using sacrebleu.
+    Returns the BLEU score as a float between 0 and 100.
     """
     try:
         # Extract data
         response = response_data.get('parsed_result', response_data.get('result', ''))
         truth = response_data['prompt'].get('parsed_truth', response_data['prompt'].get('truth', ''))
         
-        # Calculate BLEU score
-        reference = [word_tokenize(truth.lower())]
-        candidate = word_tokenize(response.lower())
-        smoothing = SmoothingFunction().method3
-        bleu_score = sentence_bleu(reference, candidate, 
-                                 weights=(0.25, 0.25, 0.25, 0.25),
-                                 smoothing_function=smoothing)
+        # Calculate BLEU score using sacrebleu
+        # sacrebleu expects a list of references and a list of hypotheses
+        references = [truth]
+        hypothesis = [response]
         
-        # Calculate ROUGE scores
-        scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
-        rouge_scores = scorer.score(truth, response)
+        # Create a BLEU scorer with standard WMT settings
+        bleu = BLEU(
+            smooth_method='exp',  # exponential smoothing
+            tokenize='13a',       # standard WMT tokenization
+            lowercase=True        # case insensitive comparison
+        )
         
-        # Create result object with safe access to rouge scores
-        # Convert the Fraction objects to float directly without using fmeasure attribute
+        # Calculate the BLEU score
+        bleu_score = bleu.corpus_score(hypothesis, [references])
+        
+        # Create result object
         result = {
-            "score": float(bleu_score),
+            "score": bleu_score.score,
             "details": {
-                "rouge1_f": float(rouge_scores['rouge1'].fmeasure) if hasattr(rouge_scores['rouge1'], 'fmeasure') else float(rouge_scores['rouge1'].f),
-                "rouge2_f": float(rouge_scores['rouge2'].fmeasure) if hasattr(rouge_scores['rouge2'], 'fmeasure') else float(rouge_scores['rouge2'].f),
-                "rougeL_f": float(rouge_scores['rougeL'].fmeasure) if hasattr(rouge_scores['rougeL'], 'fmeasure') else float(rouge_scores['rougeL'].f),
-                "reference_tokens": len(reference[0]),
-                "candidate_tokens": len(candidate)
+                "bleu": bleu_score.score,
+                "precisions": bleu_score.precisions,
+                "brevity_penalty": bleu_score.bp,
+                "length_ratio": bleu_score.sys_len / bleu_score.ref_len,
+                "reference_length": bleu_score.ref_len,
+                "system_length": bleu_score.sys_len
             }
         }
         
         print(json.dumps(result))
-        return float(bleu_score)
+        return bleu_score.score
         
     except Exception as e:
         result = {
