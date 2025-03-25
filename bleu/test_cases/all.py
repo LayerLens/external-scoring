@@ -33,13 +33,14 @@ def ll_run_tests(response_data: Dict[str, Any]) -> float:
         scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
         rouge_scores = scorer.score(truth, response)
         
-        # Create result object
+        # Create result object with safe access to rouge scores
+        # Convert the Fraction objects to float directly without using fmeasure attribute
         result = {
             "score": float(bleu_score),
             "details": {
-                "rouge1_f": float(rouge_scores['rouge1'].fmeasure),
-                "rouge2_f": float(rouge_scores['rouge2'].fmeasure),
-                "rougeL_f": float(rouge_scores['rougeL'].fmeasure),
+                "rouge1_f": float(rouge_scores['rouge1'].fmeasure) if hasattr(rouge_scores['rouge1'], 'fmeasure') else float(rouge_scores['rouge1'].f),
+                "rouge2_f": float(rouge_scores['rouge2'].fmeasure) if hasattr(rouge_scores['rouge2'], 'fmeasure') else float(rouge_scores['rouge2'].f),
+                "rougeL_f": float(rouge_scores['rougeL'].fmeasure) if hasattr(rouge_scores['rougeL'], 'fmeasure') else float(rouge_scores['rougeL'].f),
                 "reference_tokens": len(reference[0]),
                 "candidate_tokens": len(candidate)
             }
