@@ -9,7 +9,7 @@ METADATA = {}
 def ll_run_tests(response_data: Dict[str, Any]) -> float:
     """
     Main test function for BLEU score evaluation using sacrebleu.
-    Returns the BLEU score as a float between 0 and 100.
+    Returns the BLEU score as a float between 0 and 1.
     """
     try:
         # Extract data
@@ -17,25 +17,22 @@ def ll_run_tests(response_data: Dict[str, Any]) -> float:
         truth = response_data['prompt'].get('parsed_truth', response_data['prompt'].get('truth', ''))
         
         # Calculate BLEU score using sacrebleu
-        # sacrebleu expects a list of references and a list of hypotheses
         references = [truth]
         hypothesis = [response]
         
-        # Create a BLEU scorer with standard WMT settings
         bleu = BLEU(
-            smooth_method='exp',  # exponential smoothing
-            tokenize='13a',       # standard WMT tokenization
-            lowercase=True        # case insensitive comparison
+            smooth_method='exp',
+            tokenize='13a',
+            lowercase=True
         )
         
-        # Calculate the BLEU score
         bleu_score = bleu.corpus_score(hypothesis, [references])
+        normalized_score = bleu_score.score / 100.0  # Normalize to 0-1 range
         
-        # Create result object
         result = {
-            "score": bleu_score.score,
+            "score": normalized_score,
             "details": {
-                "bleu": bleu_score.score,
+                "bleu": normalized_score,
                 "precisions": bleu_score.precisions,
                 "brevity_penalty": bleu_score.bp,
                 "length_ratio": bleu_score.sys_len / bleu_score.ref_len,
@@ -45,7 +42,7 @@ def ll_run_tests(response_data: Dict[str, Any]) -> float:
         }
         
         print(json.dumps(result))
-        return bleu_score.score
+        return normalized_score
         
     except Exception as e:
         result = {
