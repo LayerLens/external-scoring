@@ -1,0 +1,4 @@
+# ScreenSpot-Pro scorer has no third-party dependencies.
+# Grading is pure stdlib: `re` for coordinate extraction + arithmetic for the
+# point-in-bbox test. The normalised ground-truth bbox is read straight from
+# prompt metadata, so no image processing / numpy / Pillow is needed.
