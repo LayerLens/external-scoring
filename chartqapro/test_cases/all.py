@@ -54,7 +54,7 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
-from anls import anls_score  # noqa: E402  # type: ignore[import-untyped]
+from anls import anls_score  # type: ignore[import-untyped]  # noqa: E402
 
 MAX_RELATIVE_CHANGE = 0.05
 EXACT_MATCH_TYPES = {"Fact Checking", "Multi Choice"}
@@ -166,7 +166,8 @@ def ll_run_tests(response_data: dict[str, Any]) -> float:  # noqa: N802
     (fractional for multi-answer prompts).
     """
     try:
-        prediction = response_data.get("parsed_result", response_data.get("result", "")) or ""
+        # or-chain: a None/empty parsed_result falls through to result.
+        prediction = response_data.get("parsed_result") or response_data.get("result") or ""
         prompt = response_data.get("prompt", {}) or {}
         metadata = prompt.get("metadata", {}) or {}
 
