@@ -140,8 +140,9 @@ def ll_run_tests(response_data: dict[str, Any]) -> float:  # noqa: N802
     UI-element bounding box, else 0.0.
     """
     try:
+        # or-chain: a None/empty parsed_result falls through to result.
         model_text = (
-            response_data.get("parsed_result", response_data.get("result", "")) or ""
+            response_data.get("parsed_result") or response_data.get("result") or ""
         )
         prompt = response_data.get("prompt", {}) or {}
         metadata = prompt.get("metadata", {}) or {}
