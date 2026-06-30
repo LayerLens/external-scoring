@@ -9,8 +9,8 @@ is in the prompt the model under test saw, never in the judge call.
 Pipeline (mirrors AnswerEvaluator.extract_answer + AnswerCompareGenerator):
   1. Extract the model's answer with the upstream regex on `text + '</answer>'`
      (the appended tag tolerates truncated/missing closing tags). Empty if none.
-  2. Fill COMPARE_ANSWER_PROMPT verbatim (numeric-tolerance + unit-handling + text
-     rules). [QUESTION]=question, [ANSWER1]=gold, [ANSWER2]=extracted model answer.
+  2. Fill COMPARE_ANSWER_PROMPT (numeric-tolerance + unit-handling + text rules).
+     [QUESTION]=question, [ANSWER1]=gold, [ANSWER2]=extracted model answer.
   3. One OpenRouter chat call, model gpt-4.1-mini-2025-04-14, temperature 0.
   4. Verdict = 1.0 if 'yes' in response.lower() else 0.0  (substring, as upstream).
 
@@ -39,12 +39,17 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # .env exposes `OPENROUTER_API_KEY`. Accept either so the scorer works in both.
 _API_KEY_ENV_NAMES = ("OpenRouterApiKey", "OPENROUTER_API_KEY")
 
-# Retry/backoff kept well within the harness's 30s/prompt budget.
-MAX_RETRIES = 3
-BACKOFF_SECONDS = 3.0
-REQUEST_TIMEOUT_SECONDS = 20
+# Retry/backoff MUST keep total wall-clock under the harness's hard 30s/prompt cap:
+# go-evaluator runs each scorer in a subprocess wrapped in a 30s context and SIGKILLs
+# it on expiry, recording 0.0+error (it does NOT just lose the retry) - so a slow judge
+# could score a correct answer 0. Worst case here = 2*10 + 1*2 = 22s, leaving margin for
+# process spawn + JSON I/O.
+MAX_RETRIES = 2
+BACKOFF_SECONDS = 2.0
+REQUEST_TIMEOUT_SECONDS = 10
 
-# --- Prompts (copied VERBATIM from ChartMuseum prompt.py) ------------------------
+# --- Prompts (from ChartMuseum prompt.py; content faithful, a few lines' trailing
+#     whitespace normalized away - inert for a temp-0 judge) ----------------------
 COMPARE_ANSWER_PROMPT = """You are provided with a question and two answers. Please determine if these answers are equivalent. Follow these guidelines:
 
 1. Numerical Comparison:
@@ -155,7 +160,10 @@ def call_judge(prompt: str) -> str:
             )
             if resp.status_code == 200:
                 payload = resp.json()
-                return payload["choices"][0]["message"]["content"].strip()
+                # Bind + coerce: resp.json() is typed Any, and content could in
+                # principle be non-str; str() keeps mypy --strict happy and hardens us.
+                content = payload["choices"][0]["message"]["content"]
+                return str(content).strip()
             last_err = f"HTTP {resp.status_code}: {resp.text[:300]}"
             print(f"Judge call attempt {attempt} failed: {last_err}")
         except Exception as exc:  # noqa: BLE001
@@ -175,7 +183,9 @@ def ll_run_tests(response_data: dict[str, Any]) -> float:  # noqa: N802
     gold answer, else 0.0. Any hard failure prints an error and returns 0.0.
     """
     try:
-        model_text = response_data.get("parsed_result", response_data.get("result", "")) or ""
+        # `or`-chain (not nested get with default): if the harness ever sets
+        # parsed_result=None/"" while result has text, fall through to result.
+        model_text = response_data.get("parsed_result") or response_data.get("result") or ""
         prompt = response_data.get("prompt", {}) or {}
         gold = prompt.get("parsed_truth", prompt.get("truth", "")) or ""
         question = _build_question(response_data)
