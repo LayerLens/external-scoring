@@ -1,3 +1,7 @@
+# mypy: ignore-errors
+# Vendored VERBATIM from eth-sri/matharena src/matharena/parse_manual.py (one identical-at-
+# runtime escape fix: \pm -> \\pm). Byte-faithful upstream data tables; mypy --strict scoped
+# off for this vendored module.
 manual_mapper = {
     "00009 \\sqrt{15}": "9\\sqrt{15}",
     "The\\ area\\ of\\ triangle\\ ABC\\ is\\ \\frac{54\\sqrt{6}}{25}": "\\frac{54\\sqrt{6}}{25}",

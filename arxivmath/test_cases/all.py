@@ -55,6 +55,9 @@ def _grade(model_text: str, gold_answer: str) -> bool:
     """The arxivmath branch of MathArena's extract_and_grade (final-answer path)."""
     gold_answer_is_list = "," in gold_answer
 
+    # The mathgrade.* engine is vendored verbatim and intentionally untyped
+    # (`# mypy: ignore-errors`); the specific no-untyped-call code is needed where
+    # mypy flags a call into it.
     model_answer, _ = extract_answer(
         model_text,
         strict_parsing=False,
@@ -67,7 +70,7 @@ def _grade(model_text: str, gold_answer: str) -> bool:
         list_answer=gold_answer_is_list,
         typed_delimiters=True,
     )
-    return bool(check_answers(model_answer, typed_gold_answer))
+    return bool(check_answers(model_answer, typed_gold_answer))  # type: ignore[no-untyped-call]
 
 
 def ll_run_tests(response_data: dict[str, Any]) -> float:  # noqa: N802
@@ -77,7 +80,8 @@ def ll_run_tests(response_data: dict[str, Any]) -> float:  # noqa: N802
     to the gold answer (MathArena equivalence), else 0.0.
     """
     try:
-        model_text = response_data.get("parsed_result", response_data.get("result", "")) or ""
+        # or-chain: a None/empty parsed_result falls through to result.
+        model_text = response_data.get("parsed_result") or response_data.get("result") or ""
         prompt = response_data.get("prompt", {})
         gold_answer = prompt.get("parsed_truth", prompt.get("truth", "")) or ""
 

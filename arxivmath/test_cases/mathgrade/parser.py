@@ -1,3 +1,8 @@
+# mypy: ignore-errors
+# Vendored VERBATIM from eth-sri/matharena src/matharena/parser.py (only loguru->stdlib
+# logging and the parse_manual import path changed). Kept byte-faithful on purpose, so it
+# carries upstream's untyped style; mypy --strict is scoped off for this vendored module
+# rather than retyping upstream code (the scorer entrypoint all.py IS fully typed + strict-clean).
 """This module provides functions for parsing mathematical expressions from text."""
 
 import re
