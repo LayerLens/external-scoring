@@ -57,20 +57,20 @@ the example FAILS (exception propagates to the runner and is recorded as an
 error) - a criterion is never silently defaulted to met/not met. Tunables
 (env):
 
-  HEALTHBENCH_JUDGE_CONCURRENCY          default 24
+  HEALTHBENCH_JUDGE_CONCURRENCY          default 10
   HEALTHBENCH_JUDGE_MAX_ATTEMPTS         default 5   (per rubric item)
   HEALTHBENCH_JUDGE_TIMEOUT_SECONDS      default 8   (per HTTP request, read)
   HEALTHBENCH_JUDGE_BACKOFF_BASE_SECONDS default 0.5 (doubles per retry, cap 2)
 
-HARD BUDGET - why the defaults are aggressive: go-evaluator kills the scorer
-subprocess after 10 SECONDS per prompt (``NewEvaluator`` creates the
-PythonExecutor with ``NewPythonExecutor(10*time.Second, ...)``; the
-30 s value in scoring.go is dead code because the executor already exists).
-A killed scorer is recorded as an execution error but still contributes a 0
-to the aggregate, so timeouts must be rare. HealthBench MAIN rubric sizes:
-mean 11.4, p90 19, p99 27, max 48 items; at concurrency 24 the worst case is
-2 waves (~4-6 s) with headroom for one short retry. The backoff cap and the
-per-request read timeout are kept small for the same reason.
+HARD BUDGET: go-evaluator kills the scorer subprocess after 30 SECONDS per
+prompt (``NewEvaluator`` creates the PythonExecutor with
+``NewPythonExecutor(30*time.Second, ...)``). A killed scorer is recorded as
+an execution error but still contributes a 0 to the aggregate, so timeouts
+must be rare. HealthBench MAIN rubric sizes: mean 11.4, p90 19, p99 27,
+max 48 items; at concurrency 10 the worst case is 5 waves (~10-13 s
+measured), leaving over half the budget for judge-side retries. Concurrency
+is kept moderate to stay polite to the shared judge model (429 pressure
+multiplies across concurrently scored prompts and Batch jobs).
 """
 
 from __future__ import annotations
@@ -232,7 +232,7 @@ def load_judge_config() -> JudgeConfig:
         api_key=os.environ["JUDGE_API_KEY"],
         model_id=os.environ["JUDGE_MODEL_ID"],
         base_url=os.environ["JUDGE_BASE_URL"].rstrip("/"),
-        concurrency=_env_positive_int("HEALTHBENCH_JUDGE_CONCURRENCY", 24),
+        concurrency=_env_positive_int("HEALTHBENCH_JUDGE_CONCURRENCY", 10),
         max_attempts=_env_positive_int("HEALTHBENCH_JUDGE_MAX_ATTEMPTS", 5),
         timeout_seconds=_env_positive_float("HEALTHBENCH_JUDGE_TIMEOUT_SECONDS", 8.0),
         backoff_base_seconds=_env_positive_float(
