@@ -79,20 +79,19 @@ this process's environment, resolved from the dataset yaml's
 Missing credentials raise immediately: a judge-based scorer must never silently
 score 0.
 
-## HARD BUDGET: 30 s per prompt
+## HARD BUDGET: 120 s per prompt
 
 This is a PLATFORM limit, nothing to do with TutorBench: go-evaluator kills the
-scorer subprocess 30 s after start. ``ExecuteTest`` builds a fresh
-``context.WithTimeout(context.Background(), pe.Timeout)`` per prompt, and both
-construction sites (``evaluator/scoring.go``, ``evaluator/evaluator.go``) pass a
-hardcoded ``30*time.Second``. There is no per-dataset override and no env knob -
-raising it means a go-evaluator change affecting every external_scoring eval.
+scorer subprocess ``externalScorerTimeout`` after start (``python_executor.go``;
+``ExecuteTest`` builds a fresh ``context.WithTimeout`` per prompt). There is no
+per-dataset override and no env knob - changing it means a go-evaluator change
+affecting every external_scoring eval.
 
 Measured rubric sizes: mean 10.2, median 9, p95 17, p99 21, max 39 criteria. At
 the default concurrency of 20, 98.5% of examples grade in a SINGLE wave and the
 worst case is 2 waves. Measured end-to-end scorer time on the hardest rows: 39
-criteria + image = 12.6 s, 28 criteria text = 10.7 s, typical rows 4.5-9.1 s -
-so the budget is comfortable, with roughly 17 s spare in the worst case.
+criteria + image = 12.6 s, 28 criteria text = 10.7 s, typical rows 4.5-9.1 s. A
+30-day prod window shows no subprocess ever killed at the budget.
 
 Tunables (env):
 
@@ -101,6 +100,7 @@ Tunables (env):
   TUTORBENCH_JUDGE_TIMEOUT_SECONDS      default 20  (per HTTP request, read)
   TUTORBENCH_JUDGE_BACKOFF_BASE_SECONDS default 0.5 (doubles per retry, cap 2)
   TUTORBENCH_JUDGE_SEND_IMAGES          default 1   (0 disables vision judging)
+  TUTORBENCH_JUDGE_JSON_MODE            default 1   (0 never sends response_format)
 """
 
 from __future__ import annotations
@@ -164,13 +164,23 @@ JUDGE_SYSTEM_MESSAGE = "You are a helpful assistant."
 # Deterministic verdicts: there is no upstream temperature to match (Scale
 # published no grading code), so 0 is chosen for reproducibility across reruns.
 JUDGE_TEMPERATURE = 0.0
-# The judge returns a short explanation plus one boolean; a small cap keeps the
-# per-call latency inside the 30 s per-prompt budget.
-JUDGE_MAX_TOKENS = 512
+# The verdict itself is tiny, but judges reason in prose before emitting it, and
+# a reply cut off mid-reasoning carries no parseable object at all. 512 was sized
+# for the verdict alone and truncated the long-response and image-heavy rows —
+# measured 11.2% zero rate on a 1473-row prod run, 72% of it judge errors. The
+# per-prompt subprocess budget is 120 s and nothing was approaching it.
+JUDGE_MAX_TOKENS = 2000
 
 _RETRYABLE_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 _BACKOFF_CAP_SECONDS = 2.0
 _IMAGE_PLACEHOLDER = "[the student's work is attached as an image]"
+_JSON_RESPONSE_FORMAT = {"type": "json_object"}
+
+# Not every OpenAI-compatible provider accepts response_format, and the judge
+# model is configurable, so a rejection must not become a hard failure: the
+# first one disables json mode process-wide and the attempt is retried without
+# it. parse_json_to_dict handles a prose-wrapped verdict regardless.
+_json_mode_disabled = False
 
 
 class JudgeConfigError(RuntimeError):
@@ -207,6 +217,7 @@ class JudgeConfig:
     timeout_seconds: float
     backoff_base_seconds: float
     send_images: bool
+    json_mode: bool
 
 
 def _env_positive_int(name: str, default: int) -> int:
@@ -256,6 +267,7 @@ def load_judge_config() -> JudgeConfig:
             "TUTORBENCH_JUDGE_BACKOFF_BASE_SECONDS", 0.5
         ),
         send_images=os.environ.get("TUTORBENCH_JUDGE_SEND_IMAGES", "1") != "0",
+        json_mode=os.environ.get("TUTORBENCH_JUDGE_JSON_MODE", "1") != "0",
     )
 
 
@@ -343,18 +355,113 @@ def render_conversation(input_messages: list[dict[str, Any]], completion: str) -
     return "\n\n".join(f"{role}: {content}" for role, content in convo)
 
 
+def _balanced_json_spans(text: str) -> list[str]:
+    """Every balanced ``{...}`` span in ``text``, outermost only, in order.
+
+    Brace counting is string- and escape-aware, so a ``{`` inside a JSON string
+    value does not open a span. An object left unterminated by a truncated reply
+    yields nothing, which is what makes truncation a failed attempt rather than
+    a half-parsed verdict.
+    """
+    spans: list[str] = []
+    depth = 0
+    start = -1
+    in_string = False
+    escaped = False
+
+    for i, ch in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}" and depth > 0:
+            depth -= 1
+            if depth == 0:
+                spans.append(text[start : i + 1])
+                start = -1
+
+    return spans
+
+
+_VERDICT_RE = re.compile(r'"criterion_satisfied"\s*:\s*(true|false)', re.I)
+
+
+def _salvage_verdict(text: str) -> dict[str, Any]:
+    """Recover the verdict from a reply whose JSON does not parse.
+
+    The judge quotes the student's own words inside ``explanation`` and does not
+    escape the inner double quotes, which makes the object invalid JSON even
+    though it is complete and the verdict is unambiguous. Only
+    ``criterion_satisfied`` feeds the score - ``explanation`` is logged and
+    nothing else - so the boolean is recovered on its own rather than discarding
+    a verdict the judge did reach.
+    """
+    matches = _VERDICT_RE.findall(text)
+    if not matches:
+        return {}
+    return {
+        "criterion_satisfied": matches[-1].lower() == "true",
+        "explanation": "recovered from a reply whose JSON did not parse",
+    }
+
+
 def parse_json_to_dict(json_string: str) -> dict[str, Any]:
-    """Strip markdown ```json fences and parse; an unparseable body yields {}
-    (treated as a failed attempt by the caller)."""
-    cleaned = re.sub(r"^```json\s*|\s*```$", "", json_string.strip())
+    """Extract the judge's verdict object; an unusable body yields {} (treated
+    as a failed attempt by the caller).
+
+    Judges routinely ignore "return just the json object" and reason in prose
+    first, so the object is located ANYWHERE in the reply rather than required
+    to be the whole of it. When several objects are present (a judge that quotes
+    the example from the prompt before answering) the LAST one carrying
+    ``criterion_satisfied`` wins, since the verdict follows the reasoning.
+    """
+    text = json_string.strip()
+
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
     try:
         parsed = json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        print(f"JSON decoding failed: {e}")
+    except json.JSONDecodeError:
+        pass
+    else:
+        if isinstance(parsed, dict):
+            return parsed
+        print(f"Judge returned non-object JSON: {type(parsed).__name__}")
         return {}
-    if isinstance(parsed, dict):
-        return parsed
-    print(f"Judge returned non-object JSON: {type(parsed).__name__}")
+
+    verdict: dict[str, Any] = {}
+    fallback: dict[str, Any] = {}
+    for span in _balanced_json_spans(text):
+        try:
+            candidate = json.loads(span)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(candidate, dict):
+            continue
+        if "criterion_satisfied" in candidate:
+            verdict = candidate
+        elif not fallback:
+            fallback = candidate
+
+    if verdict:
+        return verdict
+    if fallback:
+        return fallback
+
+    salvaged = _salvage_verdict(text)
+    if salvaged:
+        return salvaged
+
+    print(f"No JSON object found in judge reply: {text[:200]!r}")
     return {}
 
 
@@ -371,23 +478,38 @@ def _post_judge_request(
     else:
         content = grader_prompt
 
+    global _json_mode_disabled
+
+    payload: dict[str, Any] = {
+        "model": config.model_id,
+        "messages": [
+            {"role": "system", "content": JUDGE_SYSTEM_MESSAGE},
+            {"role": "user", "content": content},
+        ],
+        "temperature": JUDGE_TEMPERATURE,
+        "max_tokens": JUDGE_MAX_TOKENS,
+    }
+    json_mode = config.json_mode and not _json_mode_disabled
+    if json_mode:
+        payload["response_format"] = _JSON_RESPONSE_FORMAT
+
     response = requests.post(
         f"{config.base_url}/chat/completions",
         headers={
             "Authorization": f"Bearer {config.api_key}",
             "Content-Type": "application/json",
         },
-        json={
-            "model": config.model_id,
-            "messages": [
-                {"role": "system", "content": JUDGE_SYSTEM_MESSAGE},
-                {"role": "user", "content": content},
-            ],
-            "temperature": JUDGE_TEMPERATURE,
-            "max_tokens": JUDGE_MAX_TOKENS,
-        },
+        json=payload,
         timeout=(5.0, config.timeout_seconds),
     )
+
+    if json_mode and response.status_code in (400, 422):
+        _json_mode_disabled = True
+        raise _RetryableJudgeError(
+            "judge provider rejected response_format "
+            f"(HTTP {response.status_code}); disabling json mode and retrying: "
+            f"{response.text[:300]}"
+        )
 
     if response.status_code in _RETRYABLE_STATUS_CODES:
         raise _RetryableJudgeError(
