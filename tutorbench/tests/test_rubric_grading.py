@@ -176,6 +176,37 @@ class JsonModeFallback(unittest.TestCase):
                 rg._post_judge_request(self.config, "prompt", []), (VERDICT, "length")
             )
 
+    def test_refusal_fails_at_once_with_a_reason(self):
+        """Prod: Claude via OpenRouter refuses a vaccine-misinformation
+        criterion with HTTP 200, content null, finish_reason content_filter."""
+        refused = self._response(
+            200,
+            body={
+                "choices": [
+                    {
+                        "message": {"content": None},
+                        "finish_reason": "content_filter",
+                        "native_finish_reason": "refusal",
+                    }
+                ]
+            },
+        )
+        with mock.patch.object(rg.requests, "post", return_value=refused):
+            with self.assertRaises(rg.JudgeCallError) as ctx:
+                rg._post_judge_request(self.config, "prompt", [])
+        self.assertIn("refused", str(ctx.exception))
+
+    def test_refusal_is_not_retried(self):
+        item = rg.RubricItem(criterion="c", points=1)
+        refused = self._response(
+            200,
+            body={"choices": [{"message": {"content": None}, "finish_reason": "content_filter"}]},
+        )
+        with mock.patch.object(rg.requests, "post", return_value=refused) as post:
+            with self.assertRaises(rg.JudgeCallError):
+                rg.grade_criterion(self.config, "convo", item, 1, [])
+        self.assertEqual(post.call_count, 1)
+
     def test_response_format_is_sent_by_default(self):
         ok = self._response(200, body={"choices": [{"message": {"content": VERDICT}}]})
         with mock.patch.object(rg.requests, "post", return_value=ok) as post:

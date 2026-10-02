@@ -525,6 +525,16 @@ def _post_judge_request(
         text = choice["message"]["content"]
     except (KeyError, IndexError, TypeError) as e:
         raise _RetryableJudgeError(f"unexpected judge response shape: {e}") from e
+    # A safety refusal (e.g. a criterion about vaccine misinformation) comes
+    # back as HTTP 200 with content null. It is deterministic, so retrying only
+    # burns attempts, and it is not a verdict either way: fail the criterion
+    # with a reason that says what happened.
+    if choice.get("finish_reason") == "content_filter" or choice.get("native_finish_reason") == "refusal":
+        raise JudgeCallError(
+            "judge refused to grade (finish_reason="
+            f"{choice.get('finish_reason')}, native_finish_reason="
+            f"{choice.get('native_finish_reason')})"
+        )
     if not isinstance(text, str):
         raise _RetryableJudgeError(
             f"judge message content is not a string: {type(text).__name__}"
