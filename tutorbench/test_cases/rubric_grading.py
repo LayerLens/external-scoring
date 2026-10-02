@@ -178,8 +178,11 @@ _JSON_RESPONSE_FORMAT = {"type": "json_object"}
 
 # Not every OpenAI-compatible provider accepts response_format, and the judge
 # model is configurable, so a rejection must not become a hard failure: the
-# first one disables json mode process-wide and the attempt is retried without
-# it. parse_json_to_dict handles a prose-wrapped verdict regardless.
+# first one disables json mode for the rest of this scorer process and the
+# attempt is retried without it. go-evaluator spawns one scorer process per
+# prompt, so on a rejecting provider each prompt spends one attempt per
+# concurrent criterion rediscovering this. parse_json_to_dict handles a
+# prose-wrapped verdict regardless.
 _json_mode_disabled = False
 
 
@@ -439,7 +442,6 @@ def parse_json_to_dict(json_string: str) -> dict[str, Any]:
         return {}
 
     verdict: dict[str, Any] = {}
-    fallback: dict[str, Any] = {}
     for span in _balanced_json_spans(text):
         try:
             candidate = json.loads(span)
@@ -449,13 +451,9 @@ def parse_json_to_dict(json_string: str) -> dict[str, Any]:
             continue
         if "criterion_satisfied" in candidate:
             verdict = candidate
-        elif not fallback:
-            fallback = candidate
 
     if verdict:
         return verdict
-    if fallback:
-        return fallback
 
     salvaged = _salvage_verdict(text)
     if salvaged:
@@ -467,8 +465,9 @@ def parse_json_to_dict(json_string: str) -> dict[str, Any]:
 
 def _post_judge_request(
     config: JudgeConfig, grader_prompt: str, image_urls: list[str]
-) -> str:
-    """One HTTP round-trip to the judge. Returns the completion text."""
+) -> tuple[str, str | None]:
+    """One HTTP round-trip to the judge. Returns the completion text and the
+    choice's ``finish_reason`` (None when the provider omits it)."""
     content: Any
     if image_urls and config.send_images:
         content = [{"type": "text", "text": grader_prompt}]
@@ -522,14 +521,16 @@ def _post_judge_request(
 
     body = response.json()
     try:
-        text = body["choices"][0]["message"]["content"]
+        choice = body["choices"][0]
+        text = choice["message"]["content"]
     except (KeyError, IndexError, TypeError) as e:
         raise _RetryableJudgeError(f"unexpected judge response shape: {e}") from e
     if not isinstance(text, str):
         raise _RetryableJudgeError(
             f"judge message content is not a string: {type(text).__name__}"
         )
-    return text
+    finish_reason = choice.get("finish_reason")
+    return text, finish_reason if isinstance(finish_reason, str) else None
 
 
 def grade_criterion(
@@ -563,12 +564,23 @@ def grade_criterion(
             time.sleep(delay)
 
         try:
-            raw = _post_judge_request(config, grader_prompt, image_urls)
+            raw, finish_reason = _post_judge_request(config, grader_prompt, image_urls)
         except _RetryableJudgeError as e:
             failures.append(f"attempt {attempt}: {e}")
             continue
         except requests.RequestException as e:
             failures.append(f"attempt {attempt}: transport error: {e}")
+            continue
+
+        # A reply cut off at max_tokens never reached its verdict, which comes
+        # last. Any criterion_satisfied it does contain belongs to reasoning or
+        # to an echo of the prompt's worked example (whose verdict is true), so
+        # reading one would bias truncations toward "satisfied".
+        if finish_reason == "length":
+            failures.append(
+                f"attempt {attempt}: judge reply truncated at "
+                f"max_tokens={JUDGE_MAX_TOKENS}: {raw[-200:]!r}"
+            )
             continue
 
         verdict = parse_json_to_dict(raw)

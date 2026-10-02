@@ -98,6 +98,13 @@ class ParseJudgeReply(unittest.TestCase):
     def test_prose_with_no_object_at_all(self):
         self.assertEqual(rg.parse_json_to_dict("Looking at the criterion"), {})
 
+    def test_verdictless_object_does_not_block_salvage(self):
+        reply = (
+            'Context: {"note": "unrelated"}\n'
+            '{"explanation": "student said "x" here", "criterion_satisfied": false}'
+        )
+        self.assertEqual(rg.parse_json_to_dict(reply)["criterion_satisfied"], False)
+
     def test_non_object_json_is_rejected(self):
         self.assertEqual(rg.parse_json_to_dict("[1, 2, 3]"), {})
 
@@ -159,6 +166,16 @@ class JsonModeFallback(unittest.TestCase):
         r.json.return_value = body or {}
         return r
 
+    def test_finish_reason_is_returned_with_the_text(self):
+        ok = self._response(
+            200,
+            body={"choices": [{"message": {"content": VERDICT}, "finish_reason": "length"}]},
+        )
+        with mock.patch.object(rg.requests, "post", return_value=ok):
+            self.assertEqual(
+                rg._post_judge_request(self.config, "prompt", []), (VERDICT, "length")
+            )
+
     def test_response_format_is_sent_by_default(self):
         ok = self._response(200, body={"choices": [{"message": {"content": VERDICT}}]})
         with mock.patch.object(rg.requests, "post", return_value=ok) as post:
@@ -209,13 +226,40 @@ class GradeCriterionRecovery(unittest.TestCase):
     def test_preambled_reply_no_longer_exhausts_the_retry_budget(self):
         item = rg.RubricItem(criterion="c", points=1)
         preambled = f"Looking at the criterion, I need to check...\n\n```json\n{VERDICT}\n```"
-        with mock.patch.object(rg, "_post_judge_request", return_value=preambled):
+        with mock.patch.object(
+            rg, "_post_judge_request", return_value=(preambled, "stop")
+        ):
             verdict = rg.grade_criterion(self.config, "convo", item, 1, [])
         self.assertEqual(verdict["criterion_satisfied"], True)
 
+    def test_missing_finish_reason_is_treated_as_complete(self):
+        item = rg.RubricItem(criterion="c", points=1)
+        with mock.patch.object(rg, "_post_judge_request", return_value=(VERDICT, None)):
+            verdict = rg.grade_criterion(self.config, "convo", item, 1, [])
+        self.assertEqual(verdict["criterion_satisfied"], True)
+
+    def test_truncated_reply_is_never_read_as_a_verdict(self):
+        """A reply cut off at max_tokens that echoed the prompt's worked
+        example (verdict true) must fail the attempt, not pass the criterion -
+        neither via a balanced span nor via salvage."""
+        item = rg.RubricItem(criterion="c", points=1)
+        echoed = (
+            'Like the example {"explanation": "obeyed", "criterion_satisfied": true}, '
+            'I check whether "criterion_satisfied": true holds here. The student'
+        )
+        with mock.patch.object(
+            rg, "_post_judge_request", return_value=(echoed, "length")
+        ) as post:
+            with self.assertRaises(rg.JudgeCallError) as ctx:
+                rg.grade_criterion(self.config, "convo", item, 1, [])
+        self.assertEqual(post.call_count, self.config.max_attempts)
+        self.assertIn("truncated", str(ctx.exception))
+
     def test_unusable_reply_still_raises_rather_than_defaulting(self):
         item = rg.RubricItem(criterion="c", points=1)
-        with mock.patch.object(rg, "_post_judge_request", return_value="no json here"):
+        with mock.patch.object(
+            rg, "_post_judge_request", return_value=("no json here", "stop")
+        ):
             with self.assertRaises(rg.JudgeCallError):
                 rg.grade_criterion(self.config, "convo", item, 1, [])
 
